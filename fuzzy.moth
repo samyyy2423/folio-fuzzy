@@ -1,0 +1,403 @@
+# Fuzzy finding: how far apart two words are, the nearest of a list to a misspelt one ("did you mean...?"), and
+# a list searched as a command palette or fzf searches it, by letters in order ("nts" finds "notes.txt"), the
+# best first, with the letters it matched. In Moth alone, so it works everywhere.
+#
+#   use the package "fuzzy" as fuzzy
+#   say fuzzy's distance("kitten", "sitting")                       # 3: letters to change, add, remove or swap
+#   say fuzzy's similarity("colour", "color")                       # 0.833...: from 0 to 1
+#   say fuzzy's closest("pyhton", list of "python", "perl", "php")  # python; nothing if none is near
+#   say fuzzy's suggestions("strt", list of "start", "stop", "stat", "string")   # ["start", "stat"]: the near ones
+#   set files to list of "notes.txt", "main.moth", "README.md", "tools/net.moth"
+#   say fuzzy's ranked("nm", files)                                 # ["tools/net.moth", "main.moth"]
+#   say fuzzy's highlighted("nm", "tools/net.moth", "[", "]")       # tools/[n]et.[m]oth
+#
+# distance counts a letter changed, added or taken away, or two next to each other swapped, as one each
+# (Damerau-Levenshtein's optimal string alignment); similarity is 1 less that over the longer word's length.
+# closest and suggestions don't mind capitals, and take words at most a third of the word's length away (at
+# least 1).
+#
+# ranked keeps the choices that have the query's letters in order, not minding capitals or the query's spaces,
+# best first: letters next to each other, at the start of a word (after a space, _, -, /, . or a capital in
+# camelCase), and near the start score higher, as fzf scores them; ties go to the shorter, then the first.
+# score(query, choice) is that score, or nothing if it doesn't match; positions(query, choice) where the
+# letters it matched are; matches(query, choice) whether it matches at all.
+
+# ---------- how far apart ----------
+
+# letters changed, added, taken away, or swapped with the one next to them, to make a into b
+to distance with a, b
+    set x to fuzzy_letters("" + a)
+    set y to fuzzy_letters("" + b)
+    set n to length of x
+    set m to length of y
+    if n is 0
+        return m
+    else if m is 0
+        return n
+    end
+    # three rows: the one before last, the last, and this one
+    set before_last to empty list
+    set last to empty list
+    for each j from 0 to m
+        add j to last
+        add 0 to before_last
+    end
+    for each i from 1 to n
+        set row to list of i
+        for each j from 1 to m
+            set cost to 1
+            if item i of x is item j of y
+                set cost to 0
+            end
+            set best to (item j of last) + cost
+            set taken to (item (j + 1) of last) + 1
+            set added to (item j of row) + 1
+            if taken is less than best
+                set best to taken
+            end
+            if added is less than best
+                set best to added
+            end
+            if i is greater than 1 and j is greater than 1 and item i of x is item (j - 1) of y
+                and item (i - 1) of x is item j of y
+                set swapped to (item (j - 1) of before_last) + 1
+                if swapped is less than best
+                    set best to swapped
+                end
+            end
+            add best to row
+        end
+        set before_last to last
+        set last to row
+    end
+    return item (m + 1) of last
+end
+
+# from 0 (nothing alike) to 1 (the same)
+to similarity with a, b
+    set longer to length of ("" + a)
+    if length of ("" + b) is greater than longer
+        set longer to length of ("" + b)
+    end
+    if longer is 0
+        return 1
+    end
+    return 1 - distance(a, b) / longer
+end
+
+# the choice nearest the word, not minding capitals, or nothing if none is near enough
+to closest with word, choices
+    set near to suggestions(word, choices)
+    if length of near is 0
+        return nothing
+    end
+    return item 1 of near
+end
+
+# the choices near the word, nearest first, not minding capitals
+to suggestions with word, choices
+    set given to lowercase of ("" + word)
+    set most to (length of given / 3) rounded down
+    if most is less than 1
+        set most to 1
+    end
+    set found to empty list
+    set k to 1
+    for each choice in choices
+        set d to distance(given, lowercase of ("" + choice))
+        if d is at most most
+            add (record with value choice, keys_by (list of d, k)) to found
+        end
+        add 1 to k
+    end
+    return fuzzy_values(fuzzy_sorted(found))
+end
+
+# ---------- searching a list ----------
+
+# whether the query's letters are in the choice, in order, not minding capitals
+to matches with query, choice
+    set q to fuzzy_query(query)
+    set c to lowercase of ("" + choice)
+    set k to 1
+    for each letter in c
+        if k is at most length of q and letter is item k of q
+            add 1 to k
+        end
+    end
+    return k is greater than length of q
+end
+
+# how well the choice matches the query (more is better), or nothing if it doesn't
+to score with query, choice
+    set found to fuzzy_best(query, choice)
+    if found is nothing
+        return nothing
+    end
+    return found's points
+end
+
+# where the choice's letters that match the query are, from 1, or nothing if it doesn't match
+to positions with query, choice
+    set found to fuzzy_best(query, choice)
+    if found is nothing
+        return nothing
+    end
+    return found's at
+end
+
+# the choices that match the query, best first
+to ranked with query, choices
+    set found to empty list
+    set k to 1
+    for each choice in choices
+        set got to fuzzy_best(query, choice)
+        if got is not nothing
+            add (record with value choice, keys_by (list of 0 - got's points, length of ("" + choice), k)) to found
+        end
+        add 1 to k
+    end
+    return fuzzy_values(fuzzy_sorted(found))
+end
+
+# the choice with `before` and `after` around each run of letters that match the query
+to highlighted with query, choice, before, after
+    set given to "" + choice
+    set at to positions(query, given)
+    if at is nothing
+        return given
+    end
+    set marked to empty dictionary
+    for each p in at
+        set item p of marked to yes
+    end
+    set made to empty list
+    set inside to no
+    set k to 1
+    for each letter in given
+        set hit to k is in marked
+        if hit and not inside
+            add before to made
+        else if inside and not hit
+            add after to made
+        end
+        set inside to hit
+        add letter to made
+        add 1 to k
+    end
+    if inside
+        add after to made
+    end
+    return join made with ""
+end
+
+# the best way the query's letters fit the choice: a record of its points and where each letter is, or nothing
+# (a dynamic programme over query letter i at choice letter j, as fzf's second algorithm does)
+to fuzzy_best with query, choice
+    set q to fuzzy_query(query)
+    set original to fuzzy_letters("" + choice)
+    set c to fuzzy_letters(lowercase of ("" + choice))
+    set n to length of q
+    set m to length of c
+    if n is 0
+        return record with points 0, at empty list
+    end
+    if n is greater than m or not matches(query, choice)
+        return nothing
+    end
+    set none to -1000000
+    set bonuses to empty list
+    for each j from 1 to m
+        add fuzzy_bonus(original, j) to bonuses
+    end
+    # rows of points, and for each cell the j the letter before came from
+    set rows to empty list
+    set froms to empty list
+    set previous to nothing
+    set previous_chunks to nothing
+    for each i from 1 to n
+        set row to empty list
+        set from_row to empty list
+        # each cell's chunk bonus: the bonus of the letter its run of letters next to each other started at
+        set chunks to empty list
+        set running to none
+        set running_from to 0
+        for each j from 1 to m
+            # running: the best of the row before at j' <= j - 2, less 3 for a gap and 1 for each letter more
+            if i is greater than 1 and j is greater than 2
+                set opened to (item (j - 2) of previous) - 3
+                set running to running - 1
+                if opened is greater than running
+                    set running to opened
+                    set running_from to j - 2
+                end
+            end
+            set points to none
+            set came to 0
+            set chunk to 0
+            if item j of c is item i of q
+                set bonus to item j of bonuses
+                if i is 1
+                    set points to 16 + bonus * 2 - (j - 1) / 100
+                    set chunk to bonus
+                else
+                    # next to the letter before, a letter gets the bonus its run started with, and at least 4
+                    if j is greater than 1 and item (j - 1) of previous is greater than none
+                        set chunk to item (j - 1) of previous_chunks
+                        if bonus is at least 8 and bonus is greater than chunk
+                            set chunk to bonus
+                        end
+                        set run_bonus to bonus
+                        for each other in list of chunk, 4
+                            if other is greater than run_bonus
+                                set run_bonus to other
+                            end
+                        end
+                        set points to (item (j - 1) of previous) + 16 + run_bonus
+                        set came to j - 1
+                    end
+                    if running is greater than none and running + 16 + bonus is greater than points
+                        set points to running + 16 + bonus
+                        set came to running_from
+                        set chunk to bonus
+                    end
+                end
+            end
+            add points to row
+            add came to from_row
+            add chunk to chunks
+        end
+        add row to rows
+        add from_row to froms
+        set previous to row
+        set previous_chunks to chunks
+    end
+    set last_row to item n of rows
+    set best to none
+    set at_j to 0
+    for each j from 1 to m
+        if item j of last_row is greater than best
+            set best to item j of last_row
+            set at_j to j
+        end
+    end
+    if best is at most none
+        return nothing
+    end
+    set at to empty list
+    set j to at_j
+    set i to n
+    repeat while i is at least 1
+        add j to at
+        set from_row to item i of froms
+        set j to item j of from_row
+        set i to i - 1
+    end
+    set ordered to empty list
+    set k to length of at
+    repeat while k is at least 1
+        add item k of at to ordered
+        set k to k - 1
+    end
+    return record with points best, at ordered
+end
+
+# more for a letter at the start of a word: the first, one after a space or a mark, or a capital after a small
+# letter
+to fuzzy_bonus with letters, j
+    if j is 1
+        return 8
+    end
+    set before to item (j - 1) of letters
+    set here to item j of letters
+    if before is in " _-/.\\:,()[]"
+        return 8
+    end
+    if lowercase of before is before and uppercase of before is not before and uppercase of here is here
+        and lowercase of here is not here
+        return 7
+    end
+    if fuzzy_is_digit(here) and not fuzzy_is_digit(before)
+        return 7
+    end
+    return 0
+end
+
+to fuzzy_is_digit with c
+    return length of c is 1 and c is in "0123456789"
+end
+
+to fuzzy_query with query
+    set made to empty list
+    for each c in lowercase of ("" + query)
+        if c is not " "
+            add c to made
+        end
+    end
+    return made
+end
+
+to fuzzy_letters with words
+    set made to empty list
+    for each c in words
+        add c to made
+    end
+    return made
+end
+
+# ---------- sorting ----------
+
+to fuzzy_values with found
+    set made to empty list
+    for each one in found
+        add one's value to made
+    end
+    return made
+end
+
+# records sorted by their keys_by lists, smallest first, keeping the order of equal ones (a merge sort)
+to fuzzy_sorted with xs
+    set n to length of xs
+    if n is at most 1
+        return xs
+    end
+    set half to (n / 2) rounded down
+    set left_half to fuzzy_sorted(items 1 to half of xs)
+    set right_half to fuzzy_sorted(items half + 1 to n of xs)
+    set made to empty list
+    set i to 1
+    set j to 1
+    repeat while i is at most length of left_half and j is at most length of right_half
+        set a to item i of left_half
+        set b to item j of right_half
+        if fuzzy_before(b's keys_by, a's keys_by)
+            add b to made
+            add 1 to j
+        else
+            add a to made
+            add 1 to i
+        end
+    end
+    repeat while i is at most length of left_half
+        add item i of left_half to made
+        add 1 to i
+    end
+    repeat while j is at most length of right_half
+        add item j of right_half to made
+        add 1 to j
+    end
+    return made
+end
+
+to fuzzy_before with a, b
+    set k to 1
+    repeat while k is at most length of a
+        if item k of a is less than item k of b
+            return yes
+        else if item k of a is greater than item k of b
+            return no
+        end
+        add 1 to k
+    end
+    return no
+end

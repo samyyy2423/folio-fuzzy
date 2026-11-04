@@ -1,0 +1,80 @@
+# fuzzy.moth's tests: moth test fuzzy.test.moth
+
+use "fuzzy.moth" as fuzzy
+
+to test_distance
+    expect fuzzy's distance("kitten", "sitting") is 3
+    expect fuzzy's distance("", "abc") is 3
+    expect fuzzy's distance("abc", "") is 3
+    expect fuzzy's distance("same", "same") is 0
+    expect fuzzy's distance("abcd", "acbd") is 1 # a swap is one
+    expect fuzzy's distance("flaw", "lawn") is 2
+    expect fuzzy's distance("café", "cafe") is 1
+    expect fuzzy's distance("Moth", "moth") is 1 # capitals count here
+end
+
+to test_similarity
+    expect fuzzy's similarity("same", "same") is 1
+    expect fuzzy's similarity("", "") is 1
+    expect fuzzy's similarity("abc", "xyz") is 0
+    expect fuzzy's similarity("colour", "color") is 1 - 1 / 6
+end
+
+to test_closest_and_suggestions
+    set languages to list of "python", "perl", "php", "Moth"
+    expect fuzzy's closest("pyhton", languages) is "python"
+    expect fuzzy's closest("MOTH", languages) is "Moth"
+    expect fuzzy's closest("haskell", languages) is nothing
+    expect fuzzy's suggestions("strt", list of "start", "stop", "stat", "string") is list of "start", "stat"
+    expect fuzzy's suggestions("x", empty list) is empty list
+    # the nearest first, and the first of equals
+    expect fuzzy's suggestions("cat", list of "cart", "cat", "act", "bat") is list of "cat", "cart", "act", "bat"
+end
+
+to test_matching
+    expect fuzzy's matches("nts", "notes.txt")
+    expect fuzzy's matches("NT", "notes.txt")
+    expect fuzzy's matches("n t", "notes.txt") # the query's spaces don't count
+    expect not fuzzy's matches("tn", "net")
+    expect fuzzy's matches("", "anything")
+end
+
+to test_ranking
+    set files to list of "notes.txt", "main.moth", "README.md", "tools/net.moth", "unrelated"
+    expect fuzzy's ranked("nt", files) is list of "notes.txt", "tools/net.moth", "main.moth", "unrelated"
+    # a word's start, and letters next to each other, beat letters apart
+    expect fuzzy's ranked("mm", list of "summary.txt", "main.moth") is list of "main.moth", "summary.txt"
+    expect fuzzy's ranked("gs", list of "dogs", "get_started") is list of "get_started", "dogs"
+    expect fuzzy's ranked("fb", list of "fooBar", "fib") is list of "fooBar", "fib"
+    expect fuzzy's ranked("abc", list of "a_b_c", "abc") is list of "abc", "a_b_c"
+    # ties go to the shorter, then the first
+    expect fuzzy's ranked("ab", list of "abxx", "abx", "aby") is list of "abx", "aby", "abxx"
+    expect fuzzy's ranked("zzz", files) is empty list
+    expect fuzzy's ranked("", list of "b", "a") is list of "b", "a"
+end
+
+to test_positions_and_highlights
+    expect fuzzy's positions("nt", "notes.txt") is list of 1, 7 # the start of "txt" beats a letter between
+    expect fuzzy's positions("mm", "main.moth") is list of 1, 6 # the start of each word, not 1 and 2's nearest
+    expect fuzzy's positions("x", "abc") is nothing
+    expect fuzzy's highlighted("nt", "notes.txt", "[", "]") is "[n]otes.[t]xt"
+    expect fuzzy's highlighted("not", "notes.txt", "<b>", "</b>") is "<b>not</b>es.txt"
+    expect fuzzy's highlighted("x", "abc", "[", "]") is "abc"
+    expect fuzzy's score("x", "abc") is nothing
+    expect fuzzy's score("abc", "abc") is greater than fuzzy's score("abc", "a-b-c-d")
+end
+
+to test_many_choices
+    set choices to empty list
+    for each k from 1 to 2000
+        add "file_" + k + ".txt" to choices
+    end
+    set best to fuzzy's ranked("f1999", choices)
+    expect item 1 of best is "file_1999.txt"
+end
+
+to test_the_examples
+    set files to list of "notes.txt", "main.moth", "README.md", "tools/net.moth"
+    expect fuzzy's ranked("nm", files) is list of "tools/net.moth", "main.moth"
+    expect fuzzy's highlighted("nm", "tools/net.moth", "[", "]") is "tools/[n]et.[m]oth"
+end
