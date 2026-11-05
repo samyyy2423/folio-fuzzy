@@ -1,15 +1,15 @@
 # Fuzzy finding: how far apart two words are, the nearest of a list to a misspelt one ("did you mean...?"), and
 # a list searched as a command palette or fzf searches it, by letters in order ("nts" finds "notes.txt"), the
-# best first, with the letters it matched. In Moth alone, so it works everywhere.
+# best first, with the letters it matched. In Folio alone, so it works everywhere.
 #
 #   use the package "fuzzy" as fuzzy
 #   say fuzzy's distance("kitten", "sitting")                       # 3: letters to change, add, remove or swap
 #   say fuzzy's similarity("colour", "color")                       # 0.833...: from 0 to 1
 #   say fuzzy's closest("pyhton", list of "python", "perl", "php")  # python; nothing if none is near
 #   say fuzzy's suggestions("strt", list of "start", "stop", "stat", "string")   # ["start", "stat"]: the near ones
-#   set files to list of "notes.txt", "main.moth", "README.md", "tools/net.moth"
-#   say fuzzy's ranked("nm", files)                                 # ["tools/net.moth", "main.moth"]
-#   say fuzzy's highlighted("nm", "tools/net.moth", "[", "]")       # tools/[n]et.[m]oth
+#   set files to list of "notes.txt", "main.folio", "README.md", "tools/net.folio"
+#   say fuzzy's ranked("nm", files)                                 # ["tools/net.folio", "main.folio"]
+#   say fuzzy's highlighted("nm", "tools/net.folio", "[", "]")       # tools/[n]et.[m]oth
 #
 # distance counts a letter changed, added or taken away, or two next to each other swapped, as one each
 # (Damerau-Levenshtein's optimal string alignment); similarity is 1 less that over the longer word's length.

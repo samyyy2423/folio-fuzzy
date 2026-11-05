@@ -1,12 +1,12 @@
 # fuzzy
 
-Fuzzy finding for [Moth](https://github.com/samyyy2423/moth) programs: how far apart two words are, the
+Fuzzy finding for [Folio](https://github.com/samyyy2423/folio) programs: how far apart two words are, the
 nearest of a list to a misspelt one ("did you mean...?"), and a list searched as a command palette or fzf
-searches it, by letters in order, the best first, with the letters it matched. In Moth alone, so it works
-everywhere Moth does.
+searches it, by letters in order, the best first, with the letters it matched. In Folio alone, so it works
+everywhere Folio does.
 
 ```text
-moth add fuzzy
+folio add fuzzy
 ```
 
 ```
@@ -21,9 +21,9 @@ if not (typed is in commands)
     end
 end
 
-set files to list of "notes.txt", "main.moth", "README.md", "tools/net.moth"
-say fuzzy's ranked("nm", files)                                 # ["tools/net.moth", "main.moth"]
-say fuzzy's highlighted("nm", "tools/net.moth", "[", "]")       # tools/[n]et.[m]oth
+set files to list of "notes.txt", "main.folio", "README.md", "tools/net.folio"
+say fuzzy's ranked("nm", files)                                 # ["tools/net.folio", "main.folio"]
+say fuzzy's highlighted("nm", "tools/net.folio", "[", "]")       # tools/[n]et.[m]oth
 ```
 
 ## What it has
@@ -48,9 +48,9 @@ go to the shorter choice, then the first.
 ## Tests
 
 ```text
-moth test fuzzy.test.moth
+folio test fuzzy.test.folio
 ```
 
 ## License
 
-Apache License 2.0, as Moth is: see [LICENSE](LICENSE).
+Apache License 2.0, as Folio is: see [LICENSE](LICENSE).

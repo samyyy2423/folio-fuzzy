@@ -1,6 +1,6 @@
-# fuzzy.moth's tests: moth test fuzzy.test.moth
+# fuzzy.folio's tests: folio test fuzzy.test.folio
 
-use "fuzzy.moth" as fuzzy
+use "fuzzy.folio" as fuzzy
 
 to test_distance
     expect fuzzy's distance("kitten", "sitting") is 3
